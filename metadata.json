@@ -1,0 +1,8 @@
+{
+  "name": "Multimodal Emotion & Behavior Analysis",
+  "description": "An AI-powered system that analyzes human emotions and behavior using face, voice, and text inputs.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
