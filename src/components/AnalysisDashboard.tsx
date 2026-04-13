@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { WebcamCapture } from './WebcamCapture';
 import { AudioRecorder } from './AudioRecorder';
 import { analyzeMultimodal, AnalysisResult } from '../lib/gemini';
-import { Brain, Send, History, Loader2, AlertCircle, CheckCircle2, User } from 'lucide-react';
+import { Brain, Send, History, Loader2, AlertCircle, CheckCircle2, User, X, Maximize2, MessageSquare, Mic, Camera } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export const AnalysisDashboard: React.FC = () => {
+  type InputStatus = 'idle' | 'analyzing' | 'success' | 'error';
+  
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [recordedAudio, setRecordedAudio] = useState<string | null>(null);
   const [textInput, setTextInput] = useState('');
@@ -13,6 +15,11 @@ export const AnalysisDashboard: React.FC = () => {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<any | null>(null);
+
+  const [faceStatus, setFaceStatus] = useState<InputStatus>('idle');
+  const [voiceStatus, setVoiceStatus] = useState<InputStatus>('idle');
+  const [textStatus, setTextStatus] = useState<InputStatus>('idle');
 
   useEffect(() => {
     fetchHistory();
@@ -32,9 +39,17 @@ export const AnalysisDashboard: React.FC = () => {
     if (!capturedImage && !recordedAudio && !textInput) return;
 
     setIsAnalyzing(true);
+    setFaceStatus(capturedImage ? 'analyzing' : 'idle');
+    setVoiceStatus(recordedAudio ? 'analyzing' : 'idle');
+    setTextStatus(textInput ? 'analyzing' : 'idle');
+
     try {
       const analysis = await analyzeMultimodal(capturedImage, recordedAudio, textInput);
       setResult(analysis);
+
+      setFaceStatus(capturedImage ? 'success' : 'idle');
+      setVoiceStatus(recordedAudio ? 'success' : 'idle');
+      setTextStatus(textInput ? 'success' : 'idle');
 
       // Save to DB
       await fetch('/api/reports', {
@@ -52,10 +67,35 @@ export const AnalysisDashboard: React.FC = () => {
 
       fetchHistory();
     } catch (err) {
+      setFaceStatus(capturedImage ? 'error' : 'idle');
+      setVoiceStatus(recordedAudio ? 'error' : 'idle');
+      setTextStatus(textInput ? 'error' : 'idle');
       console.error("Analysis failed:", err);
     } finally {
       setIsAnalyzing(false);
     }
+  };
+
+  const StatusBadge = ({ status }: { status: 'idle' | 'analyzing' | 'success' | 'error' }) => {
+    if (status === 'idle') return null;
+    return (
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="flex items-center gap-1.5 px-2 py-1 rounded bg-white/5 border border-white/10"
+      >
+        {status === 'analyzing' && <Loader2 size={12} className="animate-spin text-blue-400" />}
+        {status === 'success' && <CheckCircle2 size={12} className="text-emerald-400" />}
+        {status === 'error' && <AlertCircle size={12} className="text-red-400" />}
+        <span className={`text-[10px] font-mono uppercase tracking-wider ${
+          status === 'analyzing' ? 'text-blue-400' : 
+          status === 'success' ? 'text-emerald-400' : 
+          'text-red-400'
+        }`}>
+          {status}
+        </span>
+      </motion.div>
+    );
   };
 
   return (
@@ -83,26 +123,35 @@ export const AnalysisDashboard: React.FC = () => {
             {/* Input Section */}
             <div className="lg:col-span-7 space-y-8">
               <section>
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-1 h-4 bg-blue-500 rounded-full" />
-                  <h2 className="text-sm font-semibold uppercase tracking-wider text-white/70">Visual Input</h2>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-1 h-4 bg-blue-500 rounded-full" />
+                    <h2 className="text-sm font-semibold uppercase tracking-wider text-white/70">Visual Input</h2>
+                  </div>
+                  <StatusBadge status={faceStatus} />
                 </div>
                 <WebcamCapture onCapture={setCapturedImage} />
               </section>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <section>
-                  <div className="flex items-center gap-2 mb-4">
-                    <div className="w-1 h-4 bg-purple-500 rounded-full" />
-                    <h2 className="text-sm font-semibold uppercase tracking-wider text-white/70">Audio Input</h2>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-1 h-4 bg-purple-500 rounded-full" />
+                      <h2 className="text-sm font-semibold uppercase tracking-wider text-white/70">Audio Input</h2>
+                    </div>
+                    <StatusBadge status={voiceStatus} />
                   </div>
                   <AudioRecorder onRecordingComplete={setRecordedAudio} />
                 </section>
 
                 <section>
-                  <div className="flex items-center gap-2 mb-4">
-                    <div className="w-1 h-4 bg-emerald-500 rounded-full" />
-                    <h2 className="text-sm font-semibold uppercase tracking-wider text-white/70">Text Input</h2>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-1 h-4 bg-emerald-500 rounded-full" />
+                      <h2 className="text-sm font-semibold uppercase tracking-wider text-white/70">Text Input</h2>
+                    </div>
+                    <StatusBadge status={textStatus} />
                   </div>
                   <textarea
                     value={textInput}
@@ -186,32 +235,136 @@ export const AnalysisDashboard: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-4">
-            <h2 className="text-xl font-semibold mb-6">Recent Analysis History</h2>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold">Recent Analysis History</h2>
+              <p className="text-white/40 text-xs font-mono uppercase tracking-widest">{history.length} Reports Saved</p>
+            </div>
+            
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {history.map((report) => (
-                <div key={report.id} className="bg-white/5 border border-white/10 rounded-xl p-5 hover:bg-white/10 transition-colors">
+                <motion.div 
+                  key={report.id} 
+                  layoutId={`report-${report.id}`}
+                  onClick={() => setSelectedReport(report)}
+                  className="bg-white/5 border border-white/10 rounded-xl p-5 hover:bg-white/10 transition-all cursor-pointer group relative overflow-hidden"
+                >
+                  <div className="absolute top-0 left-0 w-1 h-full bg-blue-500/20 group-hover:bg-blue-500/50 transition-colors" />
+                  
                   <div className="flex justify-between items-start mb-4">
                     <span className="text-[10px] font-mono text-white/30">{new Date(report.timestamp).toLocaleString()}</span>
-                    <div className="flex gap-1">
-                      <span className="px-1.5 py-0.5 bg-blue-500/20 text-blue-400 text-[9px] rounded uppercase">{report.face_emotion}</span>
+                    <Maximize2 size={14} className="text-white/20 group-hover:text-white/60 transition-colors" />
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-500/10 border border-blue-500/20 rounded text-[9px] text-blue-400 uppercase font-medium">
+                      <Camera size={10} /> {report.face_emotion}
+                    </div>
+                    <div className="flex items-center gap-1.5 px-2 py-1 bg-purple-500/10 border border-purple-500/20 rounded text-[9px] text-purple-400 uppercase font-medium">
+                      <Mic size={10} /> {report.voice_emotion}
+                    </div>
+                    <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded text-[9px] text-emerald-400 uppercase font-medium">
+                      <MessageSquare size={10} /> {report.text_sentiment}
                     </div>
                   </div>
-                  <p className="text-sm line-clamp-3 text-white/70 mb-4 italic">"{report.behavioral_report}"</p>
-                  <div className="flex items-center gap-2 text-[10px] text-white/40">
-                    <User size={12} />
-                    {report.user_id}
+
+                  <p className="text-sm line-clamp-2 text-white/70 mb-4 italic">"{report.behavioral_report}"</p>
+                  
+                  <div className="flex items-center justify-between mt-auto pt-4 border-t border-white/5">
+                    <div className="flex items-center gap-2 text-[10px] text-white/40">
+                      <User size={12} />
+                      {report.user_id}
+                    </div>
+                    <span className="text-[10px] text-blue-400 font-medium opacity-0 group-hover:opacity-100 transition-opacity">View Full Report →</span>
                   </div>
-                </div>
+                </motion.div>
               ))}
               {history.length === 0 && (
-                <div className="col-span-full py-20 text-center text-white/20">
-                  No reports found in history.
+                <div className="col-span-full py-20 text-center text-white/20 border border-dashed border-white/10 rounded-2xl">
+                  <History size={48} className="mx-auto mb-4 opacity-10" />
+                  <p>No reports found in history. Start an analysis to see results here.</p>
                 </div>
               )}
             </div>
           </div>
         )}
       </main>
+
+      {/* Full Report Modal */}
+      <AnimatePresence>
+        {selectedReport && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedReport(null)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+            <motion.div
+              layoutId={`report-${selectedReport.id}`}
+              className="relative w-full max-w-2xl bg-[#121212] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+            >
+              <div className="p-6 border-bottom border-white/10 flex justify-between items-center bg-white/5">
+                <div>
+                  <h3 className="text-lg font-bold">Analysis Report Details</h3>
+                  <p className="text-xs text-white/40 font-mono">{new Date(selectedReport.timestamp).toLocaleString()}</p>
+                </div>
+                <button 
+                  onClick={() => setSelectedReport(null)}
+                  className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="p-8 overflow-y-auto space-y-8">
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="p-4 bg-white/5 rounded-xl border border-white/5">
+                    <div className="flex items-center gap-2 text-blue-400 mb-2">
+                      <Camera size={14} />
+                      <span className="text-[10px] font-mono uppercase tracking-widest">Face</span>
+                    </div>
+                    <p className="text-lg font-semibold">{selectedReport.face_emotion}</p>
+                  </div>
+                  <div className="p-4 bg-white/5 rounded-xl border border-white/5">
+                    <div className="flex items-center gap-2 text-purple-400 mb-2">
+                      <Mic size={14} />
+                      <span className="text-[10px] font-mono uppercase tracking-widest">Voice</span>
+                    </div>
+                    <p className="text-lg font-semibold">{selectedReport.voice_emotion}</p>
+                  </div>
+                  <div className="p-4 bg-white/5 rounded-xl border border-white/5">
+                    <div className="flex items-center gap-2 text-emerald-400 mb-2">
+                      <MessageSquare size={14} />
+                      <span className="text-[10px] font-mono uppercase tracking-widest">Text</span>
+                    </div>
+                    <p className="text-lg font-semibold">{selectedReport.text_sentiment}</p>
+                  </div>
+                </div>
+
+                <section>
+                  <h4 className="text-xs font-mono uppercase text-white/30 mb-3 tracking-widest">Multimodal Fusion Summary</h4>
+                  <div className="p-5 bg-white/5 rounded-xl border border-white/5 text-white/80 leading-relaxed">
+                    {selectedReport.multimodal_analysis}
+                  </div>
+                </section>
+
+                <section>
+                  <h4 className="text-xs font-mono uppercase text-blue-400 mb-3 tracking-widest">Behavioral Insights & Report</h4>
+                  <div className="p-6 bg-blue-500/5 border border-blue-500/10 rounded-xl text-white leading-relaxed italic text-lg">
+                    "{selectedReport.behavioral_report}"
+                  </div>
+                </section>
+
+                <div className="pt-4 flex items-center gap-2 text-[10px] text-white/20 font-mono">
+                  <User size={12} />
+                  USER_ID: {selectedReport.user_id} • REPORT_ID: {selectedReport.id}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
