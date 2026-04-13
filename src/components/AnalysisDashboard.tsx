@@ -16,6 +16,8 @@ export const AnalysisDashboard: React.FC = () => {
   const [history, setHistory] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [selectedReport, setSelectedReport] = useState<any | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [hasSaved, setHasSaved] = useState(false);
 
   const [faceStatus, setFaceStatus] = useState<InputStatus>('idle');
   const [voiceStatus, setVoiceStatus] = useState<InputStatus>('idle');
@@ -46,26 +48,11 @@ export const AnalysisDashboard: React.FC = () => {
     try {
       const analysis = await analyzeMultimodal(capturedImage, recordedAudio, textInput);
       setResult(analysis);
+      setHasSaved(false);
 
       setFaceStatus(capturedImage ? 'success' : 'idle');
       setVoiceStatus(recordedAudio ? 'success' : 'idle');
       setTextStatus(textInput ? 'success' : 'idle');
-
-      // Save to DB
-      await fetch('/api/reports', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          face_emotion: analysis.faceEmotion,
-          voice_emotion: analysis.voiceEmotion,
-          text_sentiment: analysis.textSentiment,
-          multimodal_analysis: analysis.multimodalAnalysis,
-          behavioral_report: analysis.behavioralReport,
-          user_id: 'current-user'
-        })
-      });
-
-      fetchHistory();
     } catch (err) {
       setFaceStatus(capturedImage ? 'error' : 'idle');
       setVoiceStatus(recordedAudio ? 'error' : 'idle');
@@ -73,6 +60,32 @@ export const AnalysisDashboard: React.FC = () => {
       console.error("Analysis failed:", err);
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const saveReport = async () => {
+    if (!result || isSaving || hasSaved) return;
+
+    setIsSaving(true);
+    try {
+      await fetch('/api/reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          face_emotion: result.faceEmotion,
+          voice_emotion: result.voiceEmotion,
+          text_sentiment: result.textSentiment,
+          multimodal_analysis: result.multimodalAnalysis,
+          behavioral_report: result.behavioralReport,
+          user_id: 'current-user'
+        })
+      });
+      setHasSaved(true);
+      fetchHistory();
+    } catch (err) {
+      console.error("Failed to save report:", err);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -227,6 +240,25 @@ export const AnalysisDashboard: React.FC = () => {
                         <h4 className="text-xs font-mono uppercase text-blue-400 mb-2">Behavioral Insights</h4>
                         <p className="text-sm leading-relaxed text-white/90 italic">"{result.behavioralReport}"</p>
                       </div>
+
+                      <button
+                        onClick={saveReport}
+                        disabled={isSaving || hasSaved}
+                        className={`w-full py-3 rounded-lg font-semibold flex items-center justify-center gap-2 transition-all ${
+                          hasSaved 
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                            : 'bg-white/10 text-white border border-white/20 hover:bg-white/20'
+                        }`}
+                      >
+                        {isSaving ? (
+                          <Loader2 size={18} className="animate-spin" />
+                        ) : hasSaved ? (
+                          <CheckCircle2 size={18} />
+                        ) : (
+                          <History size={18} />
+                        )}
+                        {isSaving ? 'Saving...' : hasSaved ? 'Saved to History' : 'Save to History'}
+                      </button>
                     </motion.div>
                   )}
                 </div>
